@@ -68,28 +68,29 @@ def filter_chatter(event: InputEvent) -> Union[InputEvent, None]:
         logging.debug(f'Got {event.code} - letting through')
         return event
 
-    # the values are 0 for up, 1 for down and 2 for hold
-    if event.value == 0 and not key_pressed[event.code]:
-        logging.debug(
-            f'Got {event.code} up, but key is not pressed - filtering')
-        return None
 
-    if event.value == 0 and key_pressed[event.code]:
-        logging.debug(f'Got {event.code} up - letting through')
-        last_key_up[event.code] = event.sec * 1E6 + event.usec
-        key_pressed[event.code] = False
-        return event
+    if event.value == 0 or event.value == 1:
+        keyMap = f'{event.value}/{event.code}'
+        prev = key_pressed.get(keyMap)
+        if prev is None:
+            prev = 0
 
-    prev = last_key_up.get(event.code)
-    now = event.sec * 1E6 + event.usec
+        now = event.sec * 1E6 + event.usec
+        key_pressed[keyMap] = now
+        diff = now - prev
 
-    if prev is None or now - prev > threshold * 1E3:
-        logging.debug(f'Got {event.code} down - letting through')
-        key_pressed[event.code] = True
-        return event
+        trash = threshold
 
-    logging.debug(
-        f'Got {event.code} down, but last key up was just {(now - prev) / 1E3} ms ago - filtering')
+        if keyMap == "0/KEY_BACKSPACE:14" or keyMap == "1/KEY_BACKSPACE:14":
+            trash = 80
+
+        if diff > trash * 1E3:
+            logging.debug(
+                f'Got {keyMap} diff:{diff} threshold: {threshold * 1E3}')
+            return event
+
+    logging.info(
+        f'Got {keyMap} diff:{diff} threshold: {threshold * 1E3}')
     return None
 
 
@@ -97,6 +98,10 @@ def main(args):
     global threshold
     path = args[1]
     threshold = int(args[2])
+
+    logging.info(
+        f'chattering_fix: Start')
+
 
     with get_device(path) as d:
         start_filtering(d, filter_chatter)
